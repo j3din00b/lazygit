@@ -1,11 +1,13 @@
 package controllers
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/jesseduffield/gocui"
 	"github.com/jesseduffield/lazygit/pkg/commands/git_commands"
 	"github.com/jesseduffield/lazygit/pkg/commands/patch"
+	"github.com/jesseduffield/lazygit/pkg/gui/keybindings"
 	"github.com/jesseduffield/lazygit/pkg/gui/types"
 )
 
@@ -166,7 +168,7 @@ func (self *StagingController) EditFile() error {
 }
 
 func (self *StagingController) Escape() error {
-	if self.context.GetState().SelectingRange() || self.context.GetState().SelectingHunk() {
+	if self.context.GetState().SelectingRange() || self.context.GetState().SelectingHunkEnabledByUser() {
 		self.context.GetState().SetLineSelectMode()
 		self.c.PostRefreshUpdate(self.context)
 		return nil
@@ -178,30 +180,33 @@ func (self *StagingController) Escape() error {
 
 func (self *StagingController) TogglePanel() error {
 	if self.otherContext.GetState() != nil {
-		self.c.Context().Push(self.otherContext)
+		self.c.Context().Push(self.otherContext, types.OnFocusOpts{})
 	}
 
 	return nil
 }
 
 func (self *StagingController) ToggleStaged() error {
+	if self.c.UserConfig().Git.DiffContextSize == 0 {
+		return fmt.Errorf(self.c.Tr.Actions.NotEnoughContextToStage,
+			keybindings.Label(self.c.UserConfig().Keybinding.Universal.IncreaseContextInDiffView))
+	}
+
 	return self.applySelectionAndRefresh(self.staged)
 }
 
 func (self *StagingController) DiscardSelection() error {
-	reset := func() error { return self.applySelectionAndRefresh(true) }
-
-	if !self.staged && !self.c.UserConfig().Gui.SkipDiscardChangeWarning {
-		self.c.Confirm(types.ConfirmOpts{
-			Title:         self.c.Tr.DiscardChangeTitle,
-			Prompt:        self.c.Tr.DiscardChangePrompt,
-			HandleConfirm: reset,
-		})
-
-		return nil
+	if self.c.UserConfig().Git.DiffContextSize == 0 {
+		return fmt.Errorf(self.c.Tr.Actions.NotEnoughContextToDiscard,
+			keybindings.Label(self.c.UserConfig().Keybinding.Universal.IncreaseContextInDiffView))
 	}
 
-	return reset()
+	return self.c.ConfirmIf(!self.staged && !self.c.UserConfig().Gui.SkipDiscardChangeWarning,
+		types.ConfirmOpts{
+			Title:         self.c.Tr.DiscardChangeTitle,
+			Prompt:        self.c.Tr.DiscardChangePrompt,
+			HandleConfirm: func() error { return self.applySelectionAndRefresh(true) },
+		})
 }
 
 func (self *StagingController) applySelectionAndRefresh(reverse bool) error {
@@ -209,7 +214,8 @@ func (self *StagingController) applySelectionAndRefresh(reverse bool) error {
 		return err
 	}
 
-	return self.c.Refresh(types.RefreshOptions{Scope: []types.RefreshableView{types.FILES, types.STAGING}})
+	self.c.Refresh(types.RefreshOptions{Scope: []types.RefreshableView{types.FILES, types.STAGING}})
+	return nil
 }
 
 func (self *StagingController) applySelection(reverse bool) error {
@@ -263,7 +269,8 @@ func (self *StagingController) EditHunkAndRefresh() error {
 		return err
 	}
 
-	return self.c.Refresh(types.RefreshOptions{Scope: []types.RefreshableView{types.FILES, types.STAGING}})
+	self.c.Refresh(types.RefreshOptions{Scope: []types.RefreshableView{types.FILES, types.STAGING}})
+	return nil
 }
 
 func (self *StagingController) editHunk() error {

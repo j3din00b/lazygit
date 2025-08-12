@@ -9,7 +9,9 @@ var Checkout = NewIntegrationTest(NewIntegrationTestArgs{
 	Description:  "Checkout a commit as a detached head, or checkout an existing branch at a commit",
 	ExtraCmdArgs: []string{},
 	Skip:         false,
-	SetupConfig:  func(config *config.AppConfig) {},
+	SetupConfig: func(config *config.AppConfig) {
+		config.GetUserConfig().Git.LocalBranchSortOrder = "alphabetical"
+	},
 	SetupRepo: func(shell *Shell) {
 		shell.EmptyCommit("one")
 		shell.EmptyCommit("two")
@@ -32,17 +34,18 @@ var Checkout = NewIntegrationTest(NewIntegrationTestArgs{
 		t.ExpectPopup().Menu().
 			Title(Contains("Checkout branch or commit")).
 			Lines(
-				Contains("Checkout branch").IsSelected(),
-				MatchesRegexp("Checkout commit [a-f0-9]+ as detached head"),
+				MatchesRegexp("Checkout commit [a-f0-9]+ as detached head").IsSelected(),
+				Contains("Checkout branch"),
 				Contains("Cancel"),
 			).
+			Select(Contains("Checkout branch")).
 			Tooltip(Contains("Disabled: No branches found at selected commit.")).
 			Select(MatchesRegexp("Checkout commit [a-f0-9]+ as detached head")).
 			Confirm()
 		t.Views().Branches().Lines(
 			Contains("* (HEAD detached at"),
-			Contains("branch2"),
 			Contains("branch1"),
+			Contains("branch2"),
 			Contains("master"),
 		)
 
@@ -53,17 +56,17 @@ var Checkout = NewIntegrationTest(NewIntegrationTestArgs{
 		t.ExpectPopup().Menu().
 			Title(Contains("Checkout branch or commit")).
 			Lines(
-				Contains("Checkout branch 'branch1'").IsSelected(),
+				MatchesRegexp("Checkout commit [a-f0-9]+ as detached head").IsSelected(),
+				Contains("Checkout branch 'branch1'"),
 				Contains("Checkout branch 'master'"),
-				MatchesRegexp("Checkout commit [a-f0-9]+ as detached head"),
 				Contains("Cancel"),
 			).
 			Select(Contains("Checkout branch 'master'")).
 			Confirm()
 		t.Views().Branches().Lines(
 			Contains("master"),
-			Contains("branch2"),
 			Contains("branch1"),
+			Contains("branch2"),
 		)
 	},
 })

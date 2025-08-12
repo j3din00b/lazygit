@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/jesseduffield/lazygit/pkg/commands/models"
+	"github.com/jesseduffield/lazygit/pkg/common"
 	"github.com/jesseduffield/lazygit/pkg/gui/types"
 	"github.com/samber/lo"
-	"github.com/sirupsen/logrus"
 )
 
 type FileTreeDisplayFilter int
@@ -16,6 +16,7 @@ const (
 	DisplayStaged
 	DisplayUnstaged
 	DisplayTracked
+	DisplayUntracked
 	// this shows files with merge conflicts
 	DisplayConflicted
 )
@@ -31,6 +32,8 @@ type ITree[T any] interface {
 	IsCollapsed(path string) bool
 	ToggleCollapsed(path string)
 	CollapsedPaths() *CollapsedPaths
+	CollapseAll()
+	ExpandAll()
 }
 
 type IFileTree interface {
@@ -38,6 +41,7 @@ type IFileTree interface {
 
 	FilterFiles(test func(*models.File) bool) []*models.File
 	SetStatusFilter(filter FileTreeDisplayFilter)
+	ForceShowUntracked() bool
 	Get(index int) *FileNode
 	GetFile(path string) *models.File
 	GetAllItems() []*FileNode
@@ -50,17 +54,17 @@ type FileTree struct {
 	getFiles       func() []*models.File
 	tree           *Node[models.File]
 	showTree       bool
-	log            *logrus.Entry
+	common         *common.Common
 	filter         FileTreeDisplayFilter
 	collapsedPaths *CollapsedPaths
 }
 
 var _ IFileTree = &FileTree{}
 
-func NewFileTree(getFiles func() []*models.File, log *logrus.Entry, showTree bool) *FileTree {
+func NewFileTree(getFiles func() []*models.File, common *common.Common, showTree bool) *FileTree {
 	return &FileTree{
 		getFiles:       getFiles,
-		log:            log,
+		common:         common,
 		showTree:       showTree,
 		filter:         DisplayAll,
 		collapsedPaths: NewCollapsedPaths(),
@@ -84,12 +88,20 @@ func (self *FileTree) getFilesForDisplay() []*models.File {
 	case DisplayUnstaged:
 		return self.FilterFiles(func(file *models.File) bool { return file.HasUnstagedChanges })
 	case DisplayTracked:
-		return self.FilterFiles(func(file *models.File) bool { return file.Tracked })
+		// untracked but staged files are technically not tracked by git
+		// but including such files in the filtered mode helps see what files are getting committed
+		return self.FilterFiles(func(file *models.File) bool { return file.Tracked || file.HasStagedChanges })
+	case DisplayUntracked:
+		return self.FilterFiles(func(file *models.File) bool { return !(file.Tracked || file.HasStagedChanges) })
 	case DisplayConflicted:
 		return self.FilterFiles(func(file *models.File) bool { return file.HasMergeConflicts })
 	default:
 		panic(fmt.Sprintf("Unexpected files display filter: %d", self.filter))
 	}
+}
+
+func (self *FileTree) ForceShowUntracked() bool {
+	return self.filter == DisplayUntracked
 }
 
 func (self *FileTree) FilterFiles(test func(*models.File) bool) []*models.File {
@@ -113,7 +125,7 @@ func (self *FileTree) Get(index int) *FileNode {
 
 func (self *FileTree) GetFile(path string) *models.File {
 	for _, file := range self.getFiles() {
-		if file.Name == path {
+		if file.Path == path {
 			return file
 		}
 	}
@@ -156,10 +168,11 @@ func (self *FileTree) GetAllFiles() []*models.File {
 
 func (self *FileTree) SetTree() {
 	filesForDisplay := self.getFilesForDisplay()
+	showRootItem := self.common.UserConfig().Gui.ShowRootItemInFileTree
 	if self.showTree {
-		self.tree = BuildTreeFromFiles(filesForDisplay)
+		self.tree = BuildTreeFromFiles(filesForDisplay, showRootItem)
 	} else {
-		self.tree = BuildFlatTreeFromFiles(filesForDisplay)
+		self.tree = BuildFlatTreeFromFiles(filesForDisplay, showRootItem)
 	}
 }
 
@@ -169,6 +182,20 @@ func (self *FileTree) IsCollapsed(path string) bool {
 
 func (self *FileTree) ToggleCollapsed(path string) {
 	self.collapsedPaths.ToggleCollapsed(path)
+}
+
+func (self *FileTree) CollapseAll() {
+	dirPaths := lo.FilterMap(self.GetAllItems(), func(file *FileNode, index int) (string, bool) {
+		return file.path, !file.IsFile()
+	})
+
+	for _, path := range dirPaths {
+		self.collapsedPaths.Collapse(path)
+	}
+}
+
+func (self *FileTree) ExpandAll() {
+	self.collapsedPaths.ExpandAll()
 }
 
 func (self *FileTree) Tree() *FileNode {

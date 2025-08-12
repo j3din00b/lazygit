@@ -170,8 +170,10 @@ func TestWrapViewLinesToWidth(t *testing.T) {
 	tests := []struct {
 		name                         string
 		wrap                         bool
+		editable                     bool
 		text                         string
 		width                        int
+		tabWidth                     int
 		expectedWrappedLines         []string
 		expectedWrappedLinesIndices  []int
 		expectedOriginalLinesIndices []int
@@ -352,12 +354,23 @@ func TestWrapViewLinesToWidth(t *testing.T) {
 			},
 		},
 		{
-			name:  "Tabs",
-			wrap:  true,
-			text:  "\ta\tbb\tccc\tdddd\teeeee",
-			width: 50,
+			name:     "Tabs, width 4",
+			wrap:     true,
+			text:     "\ta\tbb\tccc\tdddd\teeeee",
+			width:    50,
+			tabWidth: 4,
 			expectedWrappedLines: []string{
 				"    a   bb  ccc dddd    eeeee",
+			},
+		},
+		{
+			name:     "Tabs, width 8",
+			wrap:     true,
+			text:     "\ta\tbb\tccc\tdddddddd\teeeee",
+			width:    100,
+			tabWidth: 8,
+			expectedWrappedLines: []string{
+				"        a       bb      ccc     dddddddd        eeeee",
 			},
 		},
 		{
@@ -378,10 +391,57 @@ func TestWrapViewLinesToWidth(t *testing.T) {
 			expectedWrappedLinesIndices:  []int{0, 2, 6},
 			expectedOriginalLinesIndices: []int{0, 0, 1, 1, 1, 1, 2, 2},
 		},
+		{
+			name:     "Avoid blank line at end if not editable",
+			wrap:     true,
+			editable: false,
+			text:     "First\nSecond\nThird\n",
+			width:    10,
+			expectedWrappedLines: []string{
+				"First",
+				"Second",
+				"Third",
+			},
+			expectedWrappedLinesIndices:  []int{0, 1, 2},
+			expectedOriginalLinesIndices: []int{0, 1, 2},
+		},
+		{
+			name:     "Avoid blank line at end if not editable",
+			wrap:     true,
+			editable: false,
+			text:     "First\nSecond\nThird\n",
+			width:    10,
+			expectedWrappedLines: []string{
+				"First",
+				"Second",
+				"Third",
+			},
+			expectedWrappedLinesIndices:  []int{0, 1, 2},
+			expectedOriginalLinesIndices: []int{0, 1, 2},
+		},
+		{
+			name:     "Keep blank line at end if editable",
+			wrap:     true,
+			editable: true,
+			text:     "First\nSecond\nThird\n",
+			width:    10,
+			expectedWrappedLines: []string{
+				"First",
+				"Second",
+				"Third",
+				"",
+			},
+			expectedWrappedLinesIndices:  []int{0, 1, 2, 3},
+			expectedOriginalLinesIndices: []int{0, 1, 2, 3},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wrappedLines, wrappedLinesIndices, originalLinesIndices := WrapViewLinesToWidth(tt.wrap, tt.text, tt.width)
+			tabWidth := tt.tabWidth
+			if tabWidth == 0 {
+				tabWidth = 4
+			}
+			wrappedLines, wrappedLinesIndices, originalLinesIndices := WrapViewLinesToWidth(tt.wrap, tt.editable, tt.text, tt.width, tabWidth)
 			assert.Equal(t, tt.expectedWrappedLines, wrappedLines)
 			if tt.expectedWrappedLinesIndices != nil {
 				assert.Equal(t, tt.expectedWrappedLinesIndices, wrappedLinesIndices)
@@ -392,8 +452,10 @@ func TestWrapViewLinesToWidth(t *testing.T) {
 
 			// As a sanity check, also test that gocui's line wrapping behaves the same way
 			view := gocui.NewView("", 0, 0, tt.width+1, 1000, gocui.OutputNormal)
+			view.TabWidth = tabWidth
 			assert.Equal(t, tt.width, view.InnerWidth())
 			view.Wrap = tt.wrap
+			view.Editable = tt.editable
 			view.SetContent(tt.text)
 			assert.Equal(t, wrappedLines, view.ViewBufferLines())
 		})

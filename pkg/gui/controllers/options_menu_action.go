@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"github.com/jesseduffield/lazygit/pkg/gui/keybindings"
 	"github.com/jesseduffield/lazygit/pkg/gui/types"
 	"github.com/jesseduffield/lazygit/pkg/utils"
 	"github.com/samber/lo"
@@ -26,7 +25,7 @@ func (self *OptionsMenuAction) Call() error {
 				}
 				return &types.MenuItem{
 					OpensMenu: binding.OpensMenu,
-					Label:     binding.Description,
+					Label:     binding.GetDescription(),
 					OnPress: func() error {
 						if binding.Handler == nil {
 							return nil
@@ -61,8 +60,8 @@ func (self *OptionsMenuAction) getBindings(context types.Context) ([]*types.Bind
 	bindings, _ := self.c.GetInitialKeybindingsWithCustomCommands()
 
 	for _, binding := range bindings {
-		if keybindings.LabelFromKey(binding.Key) != "" && binding.Description != "" {
-			if binding.ViewName == "" {
+		if binding.GetDescription() != "" {
+			if binding.ViewName == "" || binding.Tag == "global" {
 				bindingsGlobal = append(bindingsGlobal, binding)
 			} else if binding.ViewName == context.GetViewName() {
 				if binding.Tag == "navigation" {
@@ -81,6 +80,6 @@ func (self *OptionsMenuAction) getBindings(context types.Context) ([]*types.Bind
 // handler in the keybinding struct.
 func uniqueBindings(bindings []*types.Binding) []*types.Binding {
 	return lo.UniqBy(bindings, func(binding *types.Binding) string {
-		return binding.Description
+		return binding.GetDescription()
 	})
 }

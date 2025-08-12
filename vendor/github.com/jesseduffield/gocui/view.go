@@ -195,6 +195,9 @@ type View struct {
 	// if true, the view will underline hyperlinks only when the cursor is on
 	// them; otherwise, they will always be underlined
 	UnderlineHyperLinksOnlyOnHover bool
+
+	// number of spaces per \t character, defaults to 4
+	TabWidth int
 }
 
 type pos struct {
@@ -424,6 +427,7 @@ func NewView(name string, x0, y0, x1, y1 int, mode OutputMode) *View {
 		searcher:          &searcher{},
 		TextArea:          &TextArea{},
 		rangeSelectStartY: -1,
+		TabWidth:          4,
 	}
 
 	v.FgColor, v.BgColor = ColorDefault, ColorDefault
@@ -515,14 +519,15 @@ func (v *View) setRune(x, y int, ch rune, fgColor, bgColor Attribute) {
 			}
 			fgColor = fgColor | AttrBold
 			if v.HighlightInactive {
-				bgColor = bgColor | v.InactiveViewSelBgColor
+				bgColor = (bgColor & AttrStyleBits) | v.InactiveViewSelBgColor
 			} else {
-				bgColor = bgColor | v.SelBgColor
+				bgColor = (bgColor & AttrStyleBits) | v.SelBgColor
 			}
 		}
 	}
 
 	if matched, selected := v.isPatternMatchedRune(x, y); matched {
+		fgColor = ColorBlack
 		if selected {
 			bgColor = ColorCyan
 		} else {
@@ -557,29 +562,19 @@ func max(a, b int) int {
 }
 
 // SetCursor sets the cursor position of the view at the given point,
-// relative to the view. It checks if the position is valid.
+// relative to the view. It is allowed to set the position to a point outside
+// the visible portion of the view, or even outside the content of the view.
+// Clients are responsible for clamping to valid positions.
 func (v *View) SetCursor(x, y int) {
-	maxX, maxY := v.InnerSize()
-	if x < 0 || x >= maxX || y < 0 || y >= maxY {
-		return
-	}
 	v.cx = x
 	v.cy = y
 }
 
 func (v *View) SetCursorX(x int) {
-	maxX := v.InnerWidth()
-	if x < 0 || x >= maxX {
-		return
-	}
 	v.cx = x
 }
 
 func (v *View) SetCursorY(y int) {
-	maxY := v.InnerHeight()
-	if y < 0 || y >= maxY {
-		return
-	}
 	v.cy = y
 }
 
@@ -787,7 +782,7 @@ func (v *View) writeRunes(p []rune) {
 	}
 
 	until := len(p)
-	if until > 0 && p[until-1] == '\n' {
+	if !v.Editable && until > 0 && p[until-1] == '\n' {
 		v.pendingNewline = true
 		until--
 	}
@@ -817,6 +812,8 @@ func (v *View) writeRunes(p []rune) {
 
 	if v.pendingNewline {
 		finishLine()
+	} else {
+		v.autoRenderHyperlinksInCurrentLine()
 	}
 
 	v.updateSearchPositions()
@@ -922,9 +919,12 @@ func (v *View) parseInput(ch rune, x int, _ int) (bool, []cell) {
 			return truncateLine, nil
 		} else if ch == '\t' {
 			// fill tab-sized space
-			const tabStop = 4
+			tabWidth := v.TabWidth
+			if tabWidth < 1 {
+				tabWidth = 4
+			}
 			ch = ' '
-			repeatCount = tabStop - (x % tabStop)
+			repeatCount = tabWidth - (x % tabWidth)
 		}
 		c := cell{
 			fgColor:   v.ei.curFgColor,
@@ -1675,10 +1675,11 @@ func (v *View) RenderTextArea() {
 func updatedCursorAndOrigin(prevOrigin int, size int, cursor int) (int, int) {
 	var newViewCursor int
 	newOrigin := prevOrigin
+	usableSize := size - 1
 
-	if cursor > prevOrigin+size {
-		newOrigin = cursor - size
-		newViewCursor = size
+	if cursor > prevOrigin+usableSize {
+		newOrigin = cursor - usableSize
+		newViewCursor = usableSize
 	} else if cursor < prevOrigin {
 		newOrigin = cursor
 		newViewCursor = 0

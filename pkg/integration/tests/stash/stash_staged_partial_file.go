@@ -26,7 +26,6 @@ var StashStagedPartialFile = NewIntegrationTest(NewIntegrationTestArgs{
 				Contains(" line1\n-line2\n+line2 mod\n line3\n-line4\n+line4 mod"),
 			).
 			PressPrimaryAction().
-			PressPrimaryAction().
 			Content(
 				Contains(" line1\n line2 mod\n line3\n-line4\n+line4 mod"),
 			).
@@ -58,11 +57,12 @@ var StashStagedPartialFile = NewIntegrationTest(NewIntegrationTestArgs{
 			)
 
 		t.Views().Files().
+			Focus().
 			Lines(
 				Contains("file-staged"),
 			)
 
-		t.Views().Staging().
+		t.Views().Main().
 			Content(
 				Contains(" line1\n line2\n line3\n-line4\n+line4 mod"),
 			)

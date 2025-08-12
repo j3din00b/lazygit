@@ -11,7 +11,7 @@ import (
 // currently we are also stripping \r's which may have adverse effects for
 // windows users (but no issues have been raised yet)
 func SplitLines(multilineString string) []string {
-	multilineString = strings.Replace(multilineString, "\r", "", -1)
+	multilineString = strings.ReplaceAll(multilineString, "\r", "")
 	if multilineString == "" || multilineString == "\n" {
 		return make([]string, 0)
 	}
@@ -32,8 +32,8 @@ func SplitNul(str string) []string {
 
 // NormalizeLinefeeds - Removes all Windows and Mac style line feeds
 func NormalizeLinefeeds(str string) string {
-	str = strings.Replace(str, "\r\n", "\n", -1)
-	str = strings.Replace(str, "\r", "", -1)
+	str = strings.ReplaceAll(str, "\r\n", "\n")
+	str = strings.ReplaceAll(str, "\r", "")
 	return str
 }
 
@@ -109,8 +109,10 @@ func ScanLinesAndTruncateWhenLongerThanBuffer(maxBufferSize int) func(data []byt
 // - the line indices of the original lines, indexed by the wrapped line indices
 // If wrap is false, the text is returned as is.
 // This code needs to behave the same as `gocui.lineWrap` does.
-func WrapViewLinesToWidth(wrap bool, text string, width int) ([]string, []int, []int) {
-	text = strings.TrimSuffix(text, "\n")
+func WrapViewLinesToWidth(wrap bool, editable bool, text string, width int, tabWidth int) ([]string, []int, []int) {
+	if !editable {
+		text = strings.TrimSuffix(text, "\n")
+	}
 	lines := strings.Split(text, "\n")
 	if !wrap {
 		indices := make([]int, len(lines))
@@ -124,14 +126,18 @@ func WrapViewLinesToWidth(wrap bool, text string, width int) ([]string, []int, [
 	wrappedLineIndices := make([]int, 0, len(lines))
 	originalLineIndices := make([]int, 0, len(lines))
 
+	if tabWidth < 1 {
+		tabWidth = 4
+	}
+
 	for originalLineIdx, line := range lines {
 		wrappedLineIndices = append(wrappedLineIndices, len(wrappedLines))
 
 		// convert tabs to spaces
 		for i := 0; i < len(line); i++ {
 			if line[i] == '\t' {
-				numSpaces := 4 - (i % 4)
-				line = line[:i] + "    "[:numSpaces] + line[i+1:]
+				numSpaces := tabWidth - (i % tabWidth)
+				line = line[:i] + strings.Repeat(" ", numSpaces) + line[i+1:]
 				i += numSpaces - 1
 			}
 		}

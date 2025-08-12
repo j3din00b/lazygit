@@ -50,14 +50,9 @@ func (self *OptionsMapMgr) renderContextOptionsMap() {
 			displayStyle = *binding.DisplayStyle
 		}
 
-		description := binding.Description
-		if binding.ShortDescription != "" {
-			description = binding.ShortDescription
-		}
-
 		return bindingInfo{
 			key:         keybindings.LabelFromKey(binding.Key),
-			description: description,
+			description: binding.GetShortDescription(),
 			style:       displayStyle,
 		}
 	})
@@ -82,16 +77,10 @@ func (self *OptionsMapMgr) renderContextOptionsMap() {
 	}
 
 	// Mode-specific global keybindings
-	if self.c.Model().WorkingTreeStateAtLastCommitRefresh.IsRebasing() {
+	if state := self.c.Model().WorkingTreeStateAtLastCommitRefresh; state.Any() {
 		optionsMap = utils.Prepend(optionsMap, bindingInfo{
 			key:         keybindings.Label(self.c.KeybindingsOpts().Config.Universal.CreateRebaseOptionsMenu),
-			description: self.c.Tr.ViewRebaseOptions,
-			style:       style.FgYellow,
-		})
-	} else if self.c.Model().WorkingTreeStateAtLastCommitRefresh.IsMerging() {
-		optionsMap = utils.Prepend(optionsMap, bindingInfo{
-			key:         keybindings.Label(self.c.KeybindingsOpts().Config.Universal.CreateRebaseOptionsMenu),
-			description: self.c.Tr.ViewMergeOptions,
+			description: state.OptionsMapTitle(self.c.Tr),
 			style:       style.FgYellow,
 		})
 	}
@@ -119,7 +108,8 @@ func (self *OptionsMapMgr) formatBindingInfos(bindingInfos []bindingInfo) string
 		plainText := fmt.Sprintf("%s: %s", info.description, info.key)
 
 		// Check if adding the next formatted string exceeds the available width
-		if i > 0 && length+len(separator)+len(plainText) > width {
+		textLen := utils.StringWidth(plainText)
+		if i > 0 && length+len(separator)+textLen > width {
 			builder.WriteString(theme.OptionsFgColor.Sprint(separator + ellipsis))
 			break
 		}
@@ -131,7 +121,7 @@ func (self *OptionsMapMgr) formatBindingInfos(bindingInfos []bindingInfo) string
 			length += len(separator)
 		}
 		builder.WriteString(formatted)
-		length += len(plainText)
+		length += textLen
 	}
 
 	return builder.String()

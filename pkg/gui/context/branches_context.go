@@ -30,7 +30,7 @@ func NewBranchesContext(c *ContextCommon) *BranchesContext {
 			c.State().GetItemOperation,
 			c.State().GetRepoState().GetScreenMode() != types.SCREEN_NORMAL,
 			c.Modes().Diffing.Ref,
-			c.Views().Branches.InnerWidth(),
+			c.Views().Branches.InnerWidth()+c.Views().Branches.OriginX(),
 			c.Tr,
 			c.UserConfig(),
 			c.Model().Worktrees,
@@ -59,7 +59,7 @@ func NewBranchesContext(c *ContextCommon) *BranchesContext {
 	return self
 }
 
-func (self *BranchesContext) GetSelectedRef() types.Ref {
+func (self *BranchesContext) GetSelectedRef() models.Ref {
 	branch := self.GetSelected()
 	if branch == nil {
 		return nil

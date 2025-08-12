@@ -35,26 +35,27 @@ func (self *GlobalController) GetKeybindings(opts types.KeybindingsOpts) []*type
 			OpensMenu:   true,
 		},
 		{
-			Key:         opts.GetKey(opts.Config.Universal.CreateRebaseOptionsMenu),
-			Handler:     self.c.Helpers().MergeAndRebase.CreateRebaseOptionsMenu,
-			Description: self.c.Tr.ViewMergeRebaseOptions,
-			Tooltip:     self.c.Tr.ViewMergeRebaseOptionsTooltip,
-			OpensMenu:   true,
+			Key:               opts.GetKey(opts.Config.Universal.CreateRebaseOptionsMenu),
+			Handler:           opts.Guards.NoPopupPanel(self.c.Helpers().MergeAndRebase.CreateRebaseOptionsMenu),
+			Description:       self.c.Tr.ViewMergeRebaseOptions,
+			Tooltip:           self.c.Tr.ViewMergeRebaseOptionsTooltip,
+			OpensMenu:         true,
+			GetDisabledReason: self.canShowRebaseOptions,
 		},
 		{
 			Key:         opts.GetKey(opts.Config.Universal.Refresh),
-			Handler:     self.refresh,
+			Handler:     opts.Guards.NoPopupPanel(self.refresh),
 			Description: self.c.Tr.Refresh,
 			Tooltip:     self.c.Tr.RefreshTooltip,
 		},
 		{
 			Key:         opts.GetKey(opts.Config.Universal.NextScreenMode),
-			Handler:     self.nextScreenMode,
+			Handler:     opts.Guards.NoPopupPanel(self.nextScreenMode),
 			Description: self.c.Tr.NextScreenMode,
 		},
 		{
 			Key:         opts.GetKey(opts.Config.Universal.PrevScreenMode),
-			Handler:     self.prevScreenMode,
+			Handler:     opts.Guards.NoPopupPanel(self.prevScreenMode),
 			Description: self.c.Tr.PrevScreenMode,
 		},
 		{
@@ -78,21 +79,21 @@ func (self *GlobalController) GetKeybindings(opts types.KeybindingsOpts) []*type
 		{
 			ViewName:    "",
 			Key:         opts.GetKey(opts.Config.Universal.FilteringMenu),
-			Handler:     self.createFilteringMenu,
+			Handler:     opts.Guards.NoPopupPanel(self.createFilteringMenu),
 			Description: self.c.Tr.OpenFilteringMenu,
 			Tooltip:     self.c.Tr.OpenFilteringMenuTooltip,
 			OpensMenu:   true,
 		},
 		{
 			Key:         opts.GetKey(opts.Config.Universal.DiffingMenu),
-			Handler:     self.createDiffingMenu,
+			Handler:     opts.Guards.NoPopupPanel(self.createDiffingMenu),
 			Description: self.c.Tr.ViewDiffingOptions,
 			Tooltip:     self.c.Tr.ViewDiffingOptionsTooltip,
 			OpensMenu:   true,
 		},
 		{
 			Key:         opts.GetKey(opts.Config.Universal.DiffingMenuAlt),
-			Handler:     self.createDiffingMenu,
+			Handler:     opts.Guards.NoPopupPanel(self.createDiffingMenu),
 			Description: self.c.Tr.ViewDiffingOptions,
 			Tooltip:     self.c.Tr.ViewDiffingOptionsTooltip,
 			OpensMenu:   true,
@@ -142,7 +143,8 @@ func (self *GlobalController) createCustomPatchOptionsMenu() error {
 }
 
 func (self *GlobalController) refresh() error {
-	return self.c.Refresh(types.RefreshOptions{Mode: types.ASYNC})
+	self.c.Refresh(types.RefreshOptions{Mode: types.ASYNC})
+	return nil
 }
 
 func (self *GlobalController) nextScreenMode() error {
@@ -190,4 +192,13 @@ func (self *GlobalController) escape() error {
 
 func (self *GlobalController) toggleWhitespace() error {
 	return (&ToggleWhitespaceAction{c: self.c}).Call()
+}
+
+func (self *GlobalController) canShowRebaseOptions() *types.DisabledReason {
+	if self.c.Model().WorkingTreeStateAtLastCommitRefresh.None() {
+		return &types.DisabledReason{
+			Text: self.c.Tr.NotMergingOrRebasing,
+		}
+	}
+	return nil
 }

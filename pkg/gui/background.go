@@ -76,9 +76,9 @@ func (self *BackgroundRoutineMgr) startBackgroundFetch() {
 	self.gui.waitForIntro.Wait()
 
 	fetch := func() error {
-		err := self.backgroundFetch()
-		self.gui.c.Render()
-		return err
+		return self.gui.helpers.AppStatus.WithWaitingStatusImpl(self.gui.Tr.FetchingStatus, func(gocui.Task) error {
+			return self.backgroundFetch()
+		}, nil)
 	}
 
 	// We want an immediate fetch at startup, and since goEvery starts by
@@ -93,7 +93,8 @@ func (self *BackgroundRoutineMgr) startBackgroundFilesRefresh(refreshInterval in
 	self.gui.waitForIntro.Wait()
 
 	self.goEvery(time.Second*time.Duration(refreshInterval), self.gui.stopChan, func() error {
-		return self.gui.c.Refresh(types.RefreshOptions{Scope: []types.RefreshableView{types.FILES}})
+		self.gui.c.Refresh(types.RefreshOptions{Scope: []types.RefreshableView{types.FILES}})
+		return nil
 	})
 }
 
@@ -125,7 +126,11 @@ func (self *BackgroundRoutineMgr) goEvery(interval time.Duration, stop chan stru
 func (self *BackgroundRoutineMgr) backgroundFetch() (err error) {
 	err = self.gui.git.Sync.FetchBackground()
 
-	_ = self.gui.c.Refresh(types.RefreshOptions{Scope: []types.RefreshableView{types.BRANCHES, types.COMMITS, types.REMOTES, types.TAGS}, Mode: types.ASYNC})
+	self.gui.c.Refresh(types.RefreshOptions{Scope: []types.RefreshableView{types.BRANCHES, types.COMMITS, types.REMOTES, types.TAGS}, Mode: types.SYNC})
+
+	if err == nil {
+		err = self.gui.helpers.BranchesHelper.AutoForwardBranches()
+	}
 
 	return err
 }
